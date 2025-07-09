@@ -50,13 +50,13 @@ class PdfBookAction extends Action {
 		$charset   = $this->setProperty( 'Charset',     'iso-8859-1' );
 		$left      = $this->setProperty( 'LeftMargin',  '1cm' );
 		$right     = $this->setProperty( 'RightMargin', '1cm' );
-		$top       = $this->setProperty( 'TopMargin',   '1cm' );
-		$bottom    = $this->setProperty( 'BottomMargin', '1cm' );
+		$top       = $this->setProperty( 'TopMargin',   '1.5cm' );
+		$bottom    = $this->setProperty( 'BottomMargin', '1.5cm' );
 		$font      = $this->setProperty( 'Font',        'Arial' );
-		$size      = $this->setProperty( 'FontSize',    '8' );
+		$size      = $this->setProperty( 'FontSize',    '10' );
 		$ls        = $this->setProperty( 'FontSpacing', 1.5 );
-		$linkcol   = $this->setProperty( 'LinkColour',  '217A28' );
-		$levels    = $this->setProperty( 'TocLevels',   '2' );
+		$linkcol   = $this->setProperty( 'LinkColour',  '0645ad' );
+		$levels    = $this->setProperty( 'TocLevels',   '1' );
 		$exclude   = $this->setProperty( 'Exclude',     [] );
 		$width     = $this->setProperty( 'Width',       '' );
 		$numbering = $this->setProperty( 'Numbering', 'yes' );
@@ -141,6 +141,13 @@ class PdfBookAction extends Action {
 								// remove section-edit links
 								'enableSectionEditLinks' => false,
 							]
+						);
+
+						// Remove elements with class "smwttcontent"
+						$text = preg_replace(
+							'/<([a-z0-9]+)\b[^>]*\bclass\s*=\s*["\'][^"\']*\bsmwttcontent\b[^"\']*["\'][^>]*>.*?<\/\1>/isu',
+							'',
+							$text
 						);
 
 						// Make image urls absolute
