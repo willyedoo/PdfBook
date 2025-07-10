@@ -12,7 +12,7 @@ class PdfBookAction extends Action {
 	 * Perform the export operation
 	 */
 	public function show() {
-		global $wgPdfBookTab, $wgPdfBookDownload, $wgServer, $wgScript,
+		global $wgPdfBookTab, $wgPdfBookDownload, $wgServer, $wgScript, $wgOut,
 			$wgArticlePath, $wgScriptPath, $wgUploadPath, $wgUploadDirectory;
 
 		$user   = $this->getUser();
@@ -22,6 +22,18 @@ class PdfBookAction extends Action {
 		$book   = $title->getText();
 		$opt    = ParserOptions::newFromUser( $user );
 
+		/*
+		 * Based on a solution proposed by Peter Nomigkeit
+		 */
+		if ( file_exists( '/usr/bin/htmldoc' ) ) {
+			$htmldocExec = '/usr/bin/htmldoc';
+		} elseif ( file_exists( '/usr/local/bin/htmldoc' ) ) {
+			$htmldocExec = '/usr/local/bin/htmldoc';
+		} else {
+			$wgOut->wrapWikiMsg( '<div class="error">$1</div>', [ 'pdfbook-error-htmldoc-missing' ] );
+			return false;
+		}
+
 		$parser = MediaWikiServices::getInstance()->getParserFactory()->getInstance();
 
 		// Log the export
@@ -30,12 +42,12 @@ class PdfBookAction extends Action {
 		$log->addEntry( 'book', $title, $msg, [], $user );
 
 		// Initialise PDF variables
-		$htmldoc   = $this->setPropertyFromGlobals( 'HtmlDocPath', '/usr/bin/htmldoc' );
+		$htmldoc   = $this->setPropertyFromGlobals( 'HtmlDocPath', $htmldocExec );
 		$format    = $this->setProperty( 'format', '', '' );
 		$nothumbs  = $this->setProperty( 'nothumbs', '', '' );
 		$notitle   = $this->setProperty( 'notitle', '', '' );
 		$layout    = $format == 'single' ? '--webpage' : '--firstpage toc';
-		$charset   = $this->setProperty( 'Charset',     'en_US.utf8' );
+		$charset   = $this->setProperty( 'Charset',     'iso-8859-1' );
 		$left      = $this->setProperty( 'LeftMargin',  '1cm' );
 		$right     = $this->setProperty( 'RightMargin', '1cm' );
 		$top       = $this->setProperty( 'TopMargin',   '1.5cm' );
@@ -44,7 +56,7 @@ class PdfBookAction extends Action {
 		$size      = $this->setProperty( 'FontSize',    '10' );
 		$ls        = $this->setProperty( 'FontSpacing', 1.5 );
 		$linkcol   = $this->setProperty( 'LinkColour',  '0645ad' );
-		$levels    = $this->setProperty( 'TocLevels',   '3' );
+		$levels    = $this->setProperty( 'TocLevels',   '1' );
 		$exclude   = $this->setProperty( 'Exclude',     [] );
 		$width     = $this->setProperty( 'Width',       '' );
 		$numbering = $this->setProperty( 'Numbering', 'yes' );
@@ -114,25 +126,6 @@ class PdfBookAction extends Action {
 			$wgScriptPath = $wgServer . $wgScriptPath;
 			$wgUploadPath = $wgServer . $wgUploadPath;
 			$wgScript = $wgServer . $wgScript;
-
-// Add style for images to fit 90% width and set fonts
-			$html .= '<style>
-body { font-family: "Georgia", serif; font-size: 12pt; line-height: 1.6; }
-h1, h2, h3 { font-family: "Georgia", serif; color: #003366; }
-img { max-width: 90%; height: auto; }
-.cover-page { page-break-after: always; text-align: center; margin-top: 200px; }
-</style>';
-
-// Add cover page if exporting a category
-if ( $isCategory ) {
-    $categoryName = htmlspecialchars( $title->getText() );
-    $coverTitle = "Category: $categoryName";
-    $date = date('F j, Y');
-    $html .= "<div class='cover-page'>
-        <h1>$coverTitle</h1>
-        <p>Exported on $date</p>
-    </div>";
-}
 			foreach ( $articles as $title ) {
 				if ( is_object( $title ) && $title->exists() ) {
 					$page = MediaWikiServices::getInstance()->getWikiPageFactory()->newFromTitle( $title );
@@ -140,14 +133,6 @@ if ( $isCategory ) {
 					if ( !in_array( $ttext, $exclude ) ) {
 						$text = $page->getContent()->getNativeData();
 						$text = preg_replace( "/<!--([^@]+?)-->/", "@@" . "@@$1@@" . "@@", $text ); // preserve HTML comments
-
-// Remove Semantic MediaWiki highlighter spans and their content
-$text = preg_replace(
-    '|<span\s+class=["\']smw-highlighter["\'][^>]*>.*?</span>|si',
-    '',
-    $text
-);
-
 						$out = $parser->parse( $text, $title, $opt );
 						$text = $out->getText(
 							[
@@ -156,6 +141,13 @@ $text = preg_replace(
 								// remove section-edit links
 								'enableSectionEditLinks' => false,
 							]
+						);
+
+						// Remove elements with class "smwttcontent"
+						$text = preg_replace(
+							'/<([a-z0-9]+)\b[^>]*\bclass\s*=\s*["\'][^"\']*\bsmwttcontent\b[^"\']*["\'][^>]*>.*?<\/\1>/isu',
+							'',
+							$text
 						);
 
 						// Make image urls absolute
@@ -204,12 +196,10 @@ $text = preg_replace(
 								$commentsForPDF .= $comment['html'];
 							}
 						}
-						$html .= "$h1$text\n$commentsForPDF";
+						$html .= utf8_decode( "$h1$text\n$commentsForPDF" );
 					}
 				}
 			}
-
-			$html = removeSMWTTContent($html);
 
 			// Build the cache file
 			if ( $format == 'html' ) {
@@ -223,44 +213,17 @@ $text = preg_replace(
 				$file = $wgUploadDirectory . '/' . uniqid( 'pdf-book' );
 				file_put_contents( $file, $html );
 
-				// Read customization options from globals, fallback to request, fallback to defaults
-				$font      = isset($GLOBALS['wgPdfBookFont'])        ? $GLOBALS['wgPdfBookFont']        : $this->setProperty('Font',        'Arial');
-				$size      = isset($GLOBALS['wgPdfBookFontSize'])    ? $GLOBALS['wgPdfBookFontSize']    : $this->setProperty('FontSize',    '8');
-				$left      = isset($GLOBALS['wgPdfBookLeftMargin'])  ? $GLOBALS['wgPdfBookLeftMargin']  : $this->setProperty('LeftMargin',  '1cm');
-				$right     = isset($GLOBALS['wgPdfBookRightMargin']) ? $GLOBALS['wgPdfBookRightMargin'] : $this->setProperty('RightMargin', '1cm');
-				$top       = isset($GLOBALS['wgPdfBookTopMargin'])   ? $GLOBALS['wgPdfBookTopMargin']   : $this->setProperty('TopMargin',   '1cm');
-				$bottom    = isset($GLOBALS['wgPdfBookBottomMargin'])? $GLOBALS['wgPdfBookBottomMargin']: $this->setProperty('BottomMargin','1cm');
-				// Set logo to your specific path
-				$logo      = $GLOBALS['wgResourceBasePath'] . '/images/logo/edf_open_doaat.png';
-				$showDate  = isset($GLOBALS['wgPdfBookFooterDate'])  ? $GLOBALS['wgPdfBookFooterDate']  : false;
-
-				// Header: show logo if provided, else default
-				$headerHtml = $logo ? "<img src=\"$logo\" height=\"30\"/>" : "...";
-
-				// Footer: show page number and/or date if enabled
-				$footerHtml = $showDate ? date('Y-m-d H:i') . ' - .1.' : ".1.";
-
-				// For htmldoc command, set $LOGOIMAGE to the logo path if needed
-				$LOGOIMAGE = $logo ? "--logoimage " . escapeshellarg($logo) : "";
-
 				// Build the htmldoc command
 				$numbering = $numbering == 'yes' ? '--numbered' : '';
 				$footer = $format == 'single' ? "..." : ".1.";
 				$toc = $format == 'single' ? "" : " --toclevels " . escapeshellarg( $levels );
-				$cmd  = "--left " . escapeshellarg( $left )
-					. " --right " . escapeshellarg( $right )
-					. " --top " . escapeshellarg( $top )
-					. " --bottom " . escapeshellarg( $bottom )
-					. " --header " . escapeshellarg( $headerHtml )
-					. " --footer " . escapeshellarg( $footerHtml )
-					. " --headfootsize 8 --quiet --jpeg --color"
-					. " --bodyfont " . escapeshellarg( $font )
-					. " --fontsize " . escapeshellarg( $size )
-					. " --fontspacing " . escapeshellarg( $ls )
-					. " --linkstyle plain --linkcolor " . escapeshellarg( $linkcol )
-					. "$toc --no-title $numbering --charset "
-					. escapeshellarg( $charset ) . " $options $layout $width "
-					. $LOGOIMAGE; // Add $LOGOIMAGE to the command
+				$cmd  = "--left " . escapeshellarg( $left ) . " --right " . escapeshellarg( $right )
+					. " --top " . escapeshellarg( $top ) . " --bottom " . escapeshellarg( $bottom )
+					. " --header ... --footer $footer --headfootsize 8 --quiet --jpeg --color"
+					. " --bodyfont " . escapeshellarg( $font ) . " --fontsize " . escapeshellarg( $size )
+					." --fontspacing " . escapeshellarg( $ls ) . " --linkstyle plain --linkcolor "
+					. escapeshellarg( $linkcol ) . "$toc --no-title $numbering --charset "
+					. escapeshellarg( $charset ) . " $options $layout $width";
 				$cmd = $format == 'htmltoc'
 					? "$htmldoc -t html --format html $cmd " . escapeshellarg( $file ) . " "
 					: "$htmldoc -t pdf --format pdf14 $cmd " . escapeshellarg( $file ) . " ";
@@ -311,18 +274,4 @@ $text = preg_replace(
 		}
 		return preg_replace( '|[^/-_.a-z]|i', '', $val );
 	}
-}
-
-// Define the function outside the class (or make it a static method if you prefer)
-function removeSMWTTContent($html) {
-    $doc = new DOMDocument();
-    libxml_use_internal_errors(true); // Suppress HTML5 warnings
-    $doc->loadHTML(mb_convert_encoding($html, 'HTML-ENTITIES', 'UTF-8'));
-
-    $xpath = new DOMXPath($doc);
-    foreach ($xpath->query("//*[contains(@class, 'smwttcontent')]") as $node) {
-        $node->parentNode->removeChild($node);
-    }
-
-    return $doc->saveHTML();
 }
