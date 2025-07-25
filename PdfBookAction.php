@@ -47,7 +47,7 @@ class PdfBookAction extends Action {
 		$nothumbs  = $this->setProperty( 'nothumbs', '', '' );
 		$notitle   = $this->setProperty( 'notitle', '', '' );
 		$layout    = $format == 'single' ? '--webpage' : '--firstpage toc';
-		$charset   = $this->setProperty( 'Charset',     'iso-8859-1' );
+		$charset   = $this->setProperty( 'Charset',     'utf-8' );
 		$left      = $this->setProperty( 'LeftMargin',  '1cm' );
 		$right     = $this->setProperty( 'RightMargin', '1cm' );
 		$top       = $this->setProperty( 'TopMargin',   '1.5cm' );
@@ -196,7 +196,7 @@ class PdfBookAction extends Action {
 								$commentsForPDF .= $comment['html'];
 							}
 						}
-						$html .= utf8_decode( "$h1$text\n$commentsForPDF" );
+						$html .= "$h1$text\n$commentsForPDF";
 					}
 				}
 			}
@@ -238,7 +238,7 @@ class PdfBookAction extends Action {
 		// Output the cache file
 		$output->disable();
 		if ( $format == 'html' || $format == 'htmltoc' ) {
-			header( "Content-Type: text/html" );
+			header( "Content-Type: text/html; charset=utf-8" );
 			header( "Content-Disposition: attachment; filename=\"$book.html\"" );
 		} else {
 			header( "Content-Type: application/pdf" );
@@ -255,7 +255,7 @@ class PdfBookAction extends Action {
 		if ( isset( $GLOBALS["wgPdfBook$name"] ) ) {
 			$val = $GLOBALS["wgPdfBook$name"];
 		}
-		return preg_replace( '|[^/-_.a-z]|i', '', $val );
+		return preg_replace( '/[^\p{L}\p{N}\-\/_.]/u', '', $val );
 	}
 
 	private function setProperty( $name, $val, $prefix = 'pdf' ) {
@@ -272,6 +272,6 @@ class PdfBookAction extends Action {
 		if ( isset( $GLOBALS["wgPdfBook$name"] ) ) {
 			$val = $GLOBALS["wgPdfBook$name"];
 		}
-		return preg_replace( '|[^/-_.a-z]|i', '', $val );
+		return preg_replace( '/[^\p{L}\p{N}\-\/_.]/u', '', $val );
 	}
 }
