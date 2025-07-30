@@ -47,16 +47,16 @@ class PdfBookAction extends Action {
 		$nothumbs  = $this->setProperty( 'nothumbs', '', '' );
 		$notitle   = $this->setProperty( 'notitle', '', '' );
 		$layout    = $format == 'single' ? '--webpage' : '--firstpage toc';
-		$charset   = $this->setProperty( 'Charset',     'iso-8859-1' );
+		$charset   = $this->setProperty( 'Charset',     'utf-8' );
 		$left      = $this->setProperty( 'LeftMargin',  '1cm' );
 		$right     = $this->setProperty( 'RightMargin', '1cm' );
-		$top       = $this->setProperty( 'TopMargin',   '1cm' );
-		$bottom    = $this->setProperty( 'BottomMargin', '1cm' );
+		$top       = $this->setProperty( 'TopMargin',   '1.5cm' );
+		$bottom    = $this->setProperty( 'BottomMargin', '1.5cm' );
 		$font      = $this->setProperty( 'Font',        'Arial' );
-		$size      = $this->setProperty( 'FontSize',    '8' );
+		$size      = $this->setProperty( 'FontSize',    '10' );
 		$ls        = $this->setProperty( 'FontSpacing', 1.5 );
-		$linkcol   = $this->setProperty( 'LinkColour',  '217A28' );
-		$levels    = $this->setProperty( 'TocLevels',   '2' );
+		$linkcol   = $this->setProperty( 'LinkColour',  '0645ad' );
+		$levels    = $this->setProperty( 'TocLevels',   '1' );
 		$exclude   = $this->setProperty( 'Exclude',     [] );
 		$width     = $this->setProperty( 'Width',       '' );
 		$numbering = $this->setProperty( 'Numbering', 'yes' );
@@ -116,8 +116,8 @@ class PdfBookAction extends Action {
 
 		$cache = $wgUploadDirectory . '/pdf-book-cache-' . md5( $cache );
 
-		// If the file doesn't exist, render the content now
-		if ( !file_exists( $cache ) ) {
+		// If the file doesn't exist, or is older than 8 hours, render the content now
+		if ( !file_exists( $cache ) || ( time() - filemtime( $cache ) > 28800 ) ) {
 
 			// Format the article(s) as a single HTML document with absolute URL's
 			$html = '';
@@ -179,7 +179,7 @@ class PdfBookAction extends Action {
 						);
 
 						$ttext = basename( $ttext );
-						$h1 = $notitle ? "" : "<center><h1>$ttext</h1></center>";
+						$h1 = $notitle ? "" : "<center><h1>" . trim($ttext) . "</h1></center>";
 
 						// Add comments if selected and AjaxComments is installed
 						$commentsForPDF = '';
@@ -189,7 +189,7 @@ class PdfBookAction extends Action {
 								$commentsForPDF .= $comment['html'];
 							}
 						}
-						$html .= utf8_decode( "$h1$text\n$commentsForPDF" );
+						$html .= "$h1$text\n$commentsForPDF";
 					}
 				}
 			}
@@ -231,7 +231,7 @@ class PdfBookAction extends Action {
 		// Output the cache file
 		$output->disable();
 		if ( $format == 'html' || $format == 'htmltoc' ) {
-			header( "Content-Type: text/html" );
+			header( "Content-Type: text/html; charset=UTF-8" );
 			header( "Content-Disposition: attachment; filename=\"$book.html\"" );
 		} else {
 			header( "Content-Type: application/pdf" );
@@ -248,7 +248,7 @@ class PdfBookAction extends Action {
 		if ( isset( $GLOBALS["wgPdfBook$name"] ) ) {
 			$val = $GLOBALS["wgPdfBook$name"];
 		}
-		return preg_replace( '|[^/-_.a-z]|i', '', $val );
+		return preg_replace( '/[^\p{L}\p{N}\s\/\-_.]/u', '', $val );
 	}
 
 	private function setProperty( $name, $val, $prefix = 'pdf' ) {
@@ -265,6 +265,6 @@ class PdfBookAction extends Action {
 		if ( isset( $GLOBALS["wgPdfBook$name"] ) ) {
 			$val = $GLOBALS["wgPdfBook$name"];
 		}
-		return preg_replace( '|[^/-_.a-z]|i', '', $val );
+		return preg_replace( '/[^\p{L}\p{N}\s\/\-_.]/u', '', $val );
 	}
 }
