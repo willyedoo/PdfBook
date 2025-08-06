@@ -116,8 +116,8 @@ class PdfBookAction extends Action {
 
 		$cache = $wgUploadDirectory . '/pdf-book-cache-' . md5( $cache );
 
-		// If the file doesn't exist, render the content now
-		if ( !file_exists( $cache ) ) {
+		// If the file doesn't exist, or is older than 8 hours, render the content now
+		if ( !file_exists( $cache ) || ( time() - filemtime( $cache ) > 28800 ) ) {
 
 			// Format the article(s) as a single HTML document with absolute URL's
 			$html = '';
@@ -141,13 +141,6 @@ class PdfBookAction extends Action {
 								// remove section-edit links
 								'enableSectionEditLinks' => false,
 							]
-						);
-
-						// Remove elements with class "smwttcontent"
-						$text = preg_replace(
-							'/<([a-z0-9]+)\b[^>]*\bclass\s*=\s*["\'][^"\']*\bsmwttcontent\b[^"\']*["\'][^>]*>.*?<\/\1>/isu',
-							'',
-							$text
 						);
 
 						// Make image urls absolute
@@ -186,8 +179,8 @@ class PdfBookAction extends Action {
 						);
 
 						$ttext = basename( $ttext );
-						$h1 = $notitle ? "" : "<center><h1>$ttext</h1></center>";
-
+						$h1 = $notitle ? "" : "<center><h1>" . trim($ttext) . "</h1></center>";
+						$text = trim($text); // <-- Add this line
 						// Add comments if selected and AjaxComments is installed
 						$commentsForPDF = '';
 						if ( $comments ) {
@@ -238,7 +231,7 @@ class PdfBookAction extends Action {
 		// Output the cache file
 		$output->disable();
 		if ( $format == 'html' || $format == 'htmltoc' ) {
-			header( "Content-Type: text/html; charset=utf-8" );
+			header( "Content-Type: text/html; charset=UTF-8" );
 			header( "Content-Disposition: attachment; filename=\"$book.html\"" );
 		} else {
 			header( "Content-Type: application/pdf" );
@@ -255,7 +248,7 @@ class PdfBookAction extends Action {
 		if ( isset( $GLOBALS["wgPdfBook$name"] ) ) {
 			$val = $GLOBALS["wgPdfBook$name"];
 		}
-		return preg_replace( '/[^\p{L}\p{N}\-\/_.]/u', '', $val );
+		return preg_replace( '/[^\p{L}\p{N}\s\/\-_.]/u', '', $val );
 	}
 
 	private function setProperty( $name, $val, $prefix = 'pdf' ) {
@@ -272,6 +265,6 @@ class PdfBookAction extends Action {
 		if ( isset( $GLOBALS["wgPdfBook$name"] ) ) {
 			$val = $GLOBALS["wgPdfBook$name"];
 		}
-		return preg_replace( '/[^\p{L}\p{N}\-\/_.]/u', '', $val );
+		return preg_replace( '/[^\p{L}\p{N}\s\/\-_.]/u', '', $val );
 	}
 }
